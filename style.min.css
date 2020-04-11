@@ -1,0 +1,35 @@
+.deck {
+    text-align: center;
+  }
+
+  .active-card {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 20px;
+    height: 300px;
+    width: 250px;
+    margin: 20px auto;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .active-card-text {
+    font-size: 20px;
+    color: #333;
+    text-align: center;
+  }
+  #cards-left {
+    position: fixed; /* Fixed positioning relative to the viewport */
+    bottom: 20px; /* 20px from the bottom of the viewport */
+    right: 20px; /* 20px from the right of the viewport */
+    background-color: white; /* Optional: for better visibility */
+    padding: 5px; /* Optional: for some padding around the text */
+    border-radius: 5px; /* Optional: if you want rounded corners */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Optional: adds a subtle shadow */
+    z-index: 1000; /* Ensures it stays above other content */
+}
+
+

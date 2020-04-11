@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>AAI Heads Up</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+    integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+  <link rel="stylesheet" href="style.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js"
+    integrity="sha256-KzZiKy0DWYsnwMF+X1DvQngQ2/FxF7MF3Ff72XcpuPs=" crossorigin="anonymous"></script>
+</head>
+
+<body>
+  <div class="container">
+    <div class="text-center">
+      <img src="photo/artworks-000415907772-8vekjg-t500x500.jpg" alt="Logo" style="height:50px;">
+      <!-- Adjust the path and styling as needed -->
+      <img src="photo/8b3cc032c22d12564b4528a3742cca8f.jpg" alt="Logo" style="height:50px;">
+      <!-- Adjust the path and styling as needed -->
+      <img src="photo/images (1).jpeg" alt="Logo" style="height:50px;"> <!-- Adjust the path and styling as needed -->
+      <img src="photo/images.jpeg" alt="Logo" style="height:50px;"> <!-- Adjust the path and styling as needed -->
+      <img src="photo/e0b.jpg" alt="Logo" style="height:50px;"> <!-- Adjust the path and styling as needed -->
+      <img src="photo/FXAnVpCXEAkvmup.jpg" alt="Logo" style="height:50px;">
+      <!-- Adjust the path and styling as needed -->
+      <img src="photo/galaxy-brain-v0-wnp534z5d92c1.webp" alt="Logo" style="height:50px;">
+      <!-- Adjust the path and styling as needed -->
+
+      <div class="display-4 page-title">AAI Heads Up</div>
+
+      <p class="lead">Custom deck of AAI related cards, shuffled and ready!</p>
+      <p id="cards-left"></p>
+      <p id="timer">Time left: 00:30</p>
+    </div>
+
+    <div id="deck" class="text-center">
+      <div class="active-card mb-3">
+        <p id="card-text" class="active-card-text">Loading cards...</p>
+      </div>
+      <div>
+        <button class="btn btn-success me-2" onclick="startTurn();">Start Turn</button>
+        <button class="btn btn-info me-2" onclick="previousCard();">Previous</button>
+        <button class="btn btn-primary me-2" onclick="nextCard();">Next</button>
+        <button class="btn btn-warning" onclick="endTurn();">End Turn</button>
+      </div>
+    </div>
+    <div id="viewed-cards-container">
+      <h3>Viewed Cards:</h3>
+      <ul id="viewed-cards-list"></ul>
+    </div>
+
+  </div>
+</body>
+
+<!-- Firebase configuration -->
+<!-- <script src="firebase-config.js"></script> -->
+<script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.0.0/firebase-firestore.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKTc9A5eXovaoSxABbzp0su9Hjm9CS6NY",
+    authDomain: "flashcards-6cfa2.firebaseapp.com",
+    projectId: "flashcards-6cfa2",
+    storageBucket: "flashcards-6cfa2.appspot.com",
+    messagingSenderId: "311741672021",
+    appId: "1:311741672021:web:fed055c1d20dd0125802dc"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.firestore();
+
+  let Deck = [];
+  let currentIndex = -1;
+  let viewedCardsIds = [];
+  let countdown
+  console.log(viewedCardsIds);
+
+  document.addEventListener('keydown', function (event) {
+    if (event.keyCode === 37) { // Left arrow key
+      previousCard();
+    } else if (event.keyCode === 39) { // Right arrow key
+      nextCard();
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    hideCardText();
+    setControlButtonsEnabled(false);
+    refillCards();
+
+  });
+
+  function startTimer(duration = 30) {
+    clearInterval(countdown);
+    let timer = duration, minutes, seconds;
+    countdown = setInterval(() => {
+      minutes = parseInt(timer / 60, 10);
+      seconds = parseInt(timer % 60, 10);
+
+      minutes = minutes < 10 ? "0" + minutes : minutes;
+      seconds = seconds < 10 ? "0" + seconds : seconds;
+
+      document.getElementById('timer').textContent = `Time left: ${minutes}:${seconds}`;
+
+      if (--timer < 0) {
+        timer = duration; // Optionally reset the timer automatically
+        endTurn(); // Call endTurn() when the timer runs out
+        document.getElementById('timer').textContent = "Time's up!"; // Update timer display
+
+      }
+    }, 1000);
+  }
+
+  function displayViewedCardNames(viewedCardsIds) {
+    if (viewedCardsIds.length == 1) {
+      document.getElementById('viewed-cards-list').innerHTML = ''; // Clear the list at the start
+      return;
+    }
+    if (viewedCardsIds.length > 10) {
+      // Handle cases where there are more than 10 IDs, possibly by batching
+      console.error("Firestore whereIn query supports up to 10 items. Consider batching.");
+      return;
+    }
+
+    db.collection("flashcards").where(firebase.firestore.FieldPath.documentId(), 'in', viewedCardsIds)
+      .get()
+      .then(querySnapshot => {
+        const cardsData = {};
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          // Store each fetched card in an object with its ID as the key
+          cardsData[doc.id] = data.card; // Assuming 'card' is the field you want to display
+        });
+
+        // Clear previous contents
+        const listElement = document.getElementById('viewed-cards-list');
+        listElement.innerHTML = '';
+
+        // Append list items in the order of `viewedCardsIds`
+        viewedCardsIds.forEach(id => {
+          const cardName = cardsData[id];
+          if (cardName) { // Check if the card's data was successfully fetched
+            const li = document.createElement('li');
+            li.textContent = cardName;
+            listElement.appendChild(li);
+          }
+        });
+      })
+      .catch(error => {
+        console.error("Error getting documents:", error);
+      });
+  }
+
+  function startTurn() {
+    // Reveal the first card when "Start Turn" is clicked
+    if (Deck.length > 0) {
+      displayCard(); // Adjust this function to show the first card appropriately
+      setControlButtonsEnabled(true);
+      startTimer(30);
+    } else {
+      console.log("Deck is empty.");
+    }
+  }
+
+  function refillCards() {
+    Deck = [];
+    viewedCardsIds = []; // Reset viewed cards tracking on refill
+    currentIndex = -1; // Reset current index
+    db.collection("flashcards").where("read", "==", false).get().then((querySnapshot) => {
+      querySnapshot.forEach((doc) => {
+        Deck.push({ ...doc.data(), id: doc.id });
+      });
+      shuffle(Deck);
+      updateCardCounter(); // Update card counter here
+      nextCard(); // Use nextCard to show the first card, ensuring tracking
+      hideCardText(); // Hide card text
+    });
+  }
+
+  function updateCardDisplay() {
+    if (currentIndex >= 0 && currentIndex < Deck.length) {
+      const card = Deck[currentIndex];
+      document.getElementById('card-text').innerHTML = card.card;
+      document.getElementById('cards-left').innerHTML = `Cards left: ${Deck.length}`;
+    } else {
+      document.getElementById('card-text').innerHTML = "No more cards to review.";
+      document.getElementById('cards-left').innerHTML = "No cards left.";
+    }
+  }
+
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
+  function endTurn() {
+    clearInterval(countdown); // Stop the countdown
+    console.log("Ending turn. Cards marked as read: ", viewedCardsIds); // Log before marking as read
+    fetchAndDownloadCardNames(viewedCardsIds);
+
+    viewedCardsIds.forEach(cardId => {
+      db.collection("flashcards").doc(cardId).update({ read: true })
+        .then(() => console.log("Card marked as read: ", cardId))
+        .catch((error) => console.error("Error updating document:", error));
+    });
+
+    viewedCardsIds = []; // Clear the array after processing
+    hideCardText();
+    setControlButtonsEnabled(false);
+    refillCards(); // Refresh the deck
+
+  }
+
+  function fetchAndDownloadCardNames(ids) {
+    const batches = []; // Prepare for batching if needed
+
+    for (let i = 0; i < ids.length; i += 10) {
+        const batchIds = ids.slice(i, Math.min(i + 10, ids.length));
+        const batchQuery = db.collection("flashcards")
+                             .where(firebase.firestore.FieldPath.documentId(), 'in', batchIds)
+                             .get();
+        batches.push(batchQuery);
+    }
+
+    Promise.all(batches).then(results => {
+        let cardNames = '';
+
+        results.forEach(querySnapshot => {
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                cardNames += data.card + '\n'; // Assuming 'card' is the field name
+            });
+        });
+
+        // Trigger download
+        downloadTextFile(cardNames, 'viewed-cards.txt');
+    }).catch(error => {
+        console.error("Error fetching card names:", error);
+    });
+}
+
+function downloadTextFile(text, filename) {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a); // Append the element to the document
+    a.click();
+    document.body.removeChild(a); // Clean up
+    URL.revokeObjectURL(url); // Free up memory
+}
+
+// alternative display
+  function fetchAndDisplayCardNamesInNewTab(ids) {
+    const batches = []; // Prepare for batching if needed
+
+    for (let i = 0; i < ids.length; i += 10) {
+      const batchIds = ids.slice(i, Math.min(i + 10, ids.length));
+      const batchQuery = db.collection("flashcards")
+        .where(firebase.firestore.FieldPath.documentId(), 'in', batchIds)
+        .get();
+      batches.push(batchQuery);
+    }
+
+    Promise.all(batches).then(results => {
+      let cardNamesContent = "<ul>";
+
+      results.forEach(querySnapshot => {
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          // For each card, add an HTML list item
+          cardNamesContent += `<li>${data.card}</li>`; // Assuming 'card' is the field name
+        });
+      });
+
+      cardNamesContent += "</ul>";
+
+      // Open new window and write the content
+      const newWindow = window.open("", "_blank");
+      newWindow.document.open();
+      newWindow.document.write("<!DOCTYPE html><html><head><title>Viewed Cards</title></head><body>");
+      newWindow.document.write("<h2>Viewed Cards:</h2>");
+      newWindow.document.write(cardNamesContent);
+      newWindow.document.close(); // Finish writing to the window
+    }).catch(error => {
+      console.error("Error fetching card names:", error);
+    });
+  }
+
+  function downloadTextFile(text, filename) {
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a); // Append the element to the document
+    a.click();
+    document.body.removeChild(a); // Clean up
+    URL.revokeObjectURL(url); // Free up memory
+  }
+
+  function hideCardText() {
+    document.getElementById('card-text').textContent = "Click Start Turn"; // Hide card text
+    document.getElementById('viewed-cards-list').innerHTML = ''; // Clear viewed cards list
+  }
+
+  function setControlButtonsEnabled(enable) {
+    document.querySelector('button.btn-info').disabled = !enable; // Previous button
+    document.querySelector('button.btn-primary').disabled = !enable; // Next button
+    document.querySelector('button.btn-warning').disabled = !enable; // End Turn button
+
+  }
+
+  function nextCard() {
+    if (currentIndex < Deck.length - 1) {
+      currentIndex++;
+      displayCard(); // This will now properly add the card ID to viewedCardsIds
+    } else {
+      console.log('End of the deck.');
+    }
+  }
+
+  function previousCard() {
+    if (currentIndex > 0) {
+      currentIndex--;
+      displayCard();
+    } else {
+      console.log('Start of the deck.');
+    }
+  }
+  // Updated displayCard to track viewed cards
+  function displayCard() {
+    if (currentIndex >= 0 && currentIndex < Deck.length) {
+      const card = Deck[currentIndex];
+      document.getElementById('card-text').innerHTML = card.card;
+      if (!viewedCardsIds.includes(card.id)) {
+        viewedCardsIds.push(card.id); // This ensures the card ID is captured when displayed
+        console.log("Viewed Cards IDs: ", viewedCardsIds); // Log the viewed cards for debugging
+      }
+      displayViewedCardNames(viewedCardsIds)
+    } else {
+      document.getElementById('card-text').innerHTML = "No more cards to review.";
+    }
+  }
+
+  function updateCardCounter() {
+    const remaining = Deck.length - viewedCardsIds.length; // Calculate remaining cards
+    document.getElementById('cards-left').innerHTML = `Cards left: ${remaining}`;
+  }
+
+
+</script>
+
+</html>
